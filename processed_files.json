@@ -1,0 +1,16 @@
+{
+  "EthiopiaConstitution english.pdf": {
+    "size": 170975,
+    "mtime": 1747334100.2734845,
+    "chunks": 111,
+    "processed_at": "2025-05-15T12:08:45.513560",
+    "vector_count": 111
+  },
+  "ET_Criminal_Code.pdf": {
+    "size": 774103,
+    "mtime": 1747334967.2603226,
+    "chunks": 791,
+    "processed_at": "2025-05-15T12:08:46.460595",
+    "vector_count": 791
+  }
+}
