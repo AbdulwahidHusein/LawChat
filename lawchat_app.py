@@ -7,7 +7,6 @@ import textwrap
 import uuid  # Add this for unique keys
 
 # Configuration
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY", "")
 PINECONE_INDEX_NAME = "test-index"
 PINECONE_HOST = "https://test-index-t9390q6.svc.aped-4627-b74a.pinecone.io"
@@ -173,21 +172,67 @@ st.markdown("""
         margin-bottom: 5px;
         display: inline-block;
     }
+    
+    /* API key section */
+    .api-key-container {
+        padding: 15px;
+        background-color: #f0f7ff;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px solid #c9e0ff;
+    }
+    .api-key-header {
+        font-weight: 600;
+        margin-bottom: 10px;
+        font-size: 1.1em;
+        color: #1976D2;
+    }
+    .api-key-input {
+        border: 1px solid #c9d6e2 !important;
+        background-color: white !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
+# Test OpenAI API key validity
+def test_openai_api_key(api_key):
+    """Test if the OpenAI API key is valid by making a small request."""
+    if not api_key or not api_key.startswith("sk-"):
+        return False
+    
+    try:
+        client = openai.OpenAI(api_key=api_key)
+        # Make a minimal test request
+        response = client.embeddings.create(
+            input="Test",
+            model="text-embedding-3-small"
+        )
+        return True
+    except Exception as e:
+        st.error(f"API key validation failed: {str(e)}")
+        return False
+
+# Get OpenAI API key from session state or environment
+def get_openai_api_key():
+    """Get OpenAI API key from session state or environment variable."""
+    # First check if it's in the session state
+    if "openai_api_key" in st.session_state and st.session_state.openai_api_key:
+        return st.session_state.openai_api_key
+    
+    # Otherwise check environment variable
+    return os.environ.get("OPENAI_API_KEY", "")
+
 # Initialize OpenAI and Pinecone clients
-def initialize_clients():
+def initialize_clients(openai_api_key):
     """Initialize OpenAI and Pinecone clients with API keys."""
-    if not OPENAI_API_KEY:
-        st.error("OpenAI API key is missing. Please set the OPENAI_API_KEY environment variable.")
+    if not openai_api_key:
         return None, None
     
     if not PINECONE_API_KEY:
         st.error("Pinecone API key is missing. Please set the PINECONE_API_KEY environment variable.")
         return None, None
     
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    client = openai.OpenAI(api_key=openai_api_key)
     pc = Pinecone(api_key=PINECONE_API_KEY)
     
     try:
@@ -200,9 +245,9 @@ def initialize_clients():
         return None, None
 
 # Get embeddings for a text
-def get_embedding(text, model=EMBEDDING_MODEL):
+def get_embedding(text, model=EMBEDDING_MODEL, openai_api_key=None):
     """Convert input text to embedding vector using OpenAI API."""
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    client = openai.OpenAI(api_key=openai_api_key)
     response = client.embeddings.create(
         input=text,
         model=model
@@ -210,9 +255,9 @@ def get_embedding(text, model=EMBEDDING_MODEL):
     return response.data[0].embedding
 
 # Query Pinecone for similar documents
-def query_pinecone(query, index, top_k=TOP_K):
+def query_pinecone(query, index, openai_api_key, top_k=TOP_K):
     """Search Pinecone index for similar document chunks."""
-    query_embedding = get_embedding(query)
+    query_embedding = get_embedding(query, openai_api_key=openai_api_key)
     results = index.query(
         vector=query_embedding,
         top_k=top_k,
@@ -221,9 +266,9 @@ def query_pinecone(query, index, top_k=TOP_K):
     return results
 
 # Create a chat completion with OpenAI
-def get_chat_completion(messages, model=CHAT_MODEL):
+def get_chat_completion(messages, openai_api_key, model=CHAT_MODEL):
     """Generate a response from OpenAI based on the conversation."""
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    client = openai.OpenAI(api_key=openai_api_key)
     response = client.chat.completions.create(
         model=model,
         messages=messages,
@@ -358,15 +403,75 @@ def display_sources_sidebar(sources):
             )
             st.markdown("</div>", unsafe_allow_html=True)
 
+# API key input form
+def api_key_form():
+    """Display form for entering the OpenAI API key."""
+    # Check if the API key is already in the session state
+    if "openai_api_key" not in st.session_state:
+        st.session_state.openai_api_key = ""
+    
+    # Check environment variable first
+    env_api_key = os.environ.get("OPENAI_API_KEY", "")
+    if env_api_key and not st.session_state.openai_api_key:
+        st.session_state.openai_api_key = env_api_key
+    
+    st.markdown('<div class="api-key-container">', unsafe_allow_html=True)
+    st.markdown('<div class="api-key-header">🔑 OpenAI API Key</div>', unsafe_allow_html=True)
+    
+    # Input field for the API key
+    api_key = st.text_input(
+        "Enter your OpenAI API key:",
+        type="password",
+        value=st.session_state.openai_api_key,
+        key="api_key_input",
+        help="Your API key will be stored only in this session and not saved permanently. Must start with 'sk-'.",
+    )
+    
+    col1, col2 = st.columns([1, 3])
+    # Save button
+    with col1:
+        if st.button("Save & Verify", key="save_api_key"):
+            if api_key and api_key.startswith("sk-"):
+                # Test the key before saving
+                if test_openai_api_key(api_key):
+                    st.session_state.openai_api_key = api_key
+                    st.success("✅ API key verified and saved for this session!")
+                else:
+                    st.error("❌ Invalid API key. Please check and try again.")
+            else:
+                st.error("❌ Please enter a valid OpenAI API key (must start with 'sk-').")
+    
+    with col2:
+        st.markdown("""
+        <div style="padding: 10px; font-size: 0.85em; color: #555;">
+        Need an API key? <a href="https://platform.openai.com/account/api-keys" target="_blank">Get one from OpenAI</a>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    return st.session_state.openai_api_key
+
 # Main application
 def main():
     """Main application logic."""
     # Add a header
     st.markdown("<h1 style='text-align: center; margin-bottom: 1.5rem;'>LawChat <small>Legal Research Assistant</small></h1>", unsafe_allow_html=True)
     
-    # Initialize clients
-    client, index = initialize_clients()
+    # Get OpenAI API key from form
+    openai_api_key = api_key_form()
+    
+    # Check if API key is valid before initializing clients
+    if not openai_api_key or not openai_api_key.startswith("sk-"):
+        st.warning("Please enter a valid OpenAI API key to continue.")
+        st.stop()  # Stop execution if no valid API key
+    
+    # Initialize clients with the provided OpenAI API key
+    client, index = initialize_clients(openai_api_key)
+    
+    # If API key is not provided or invalid, show error and return
     if not client or not index:
+        st.error("Failed to initialize. Please check your API keys and try again.")
         return
     
     # Initialize session state for chat history (but only once)
@@ -399,7 +504,7 @@ def main():
             st.markdown('<div class="loading-message">🔍 Searching through legal documents...</div>', unsafe_allow_html=True)
             
             # Query Pinecone for relevant documents
-            results = query_pinecone(user_input, index)
+            results = query_pinecone(user_input, index, openai_api_key)
             
             # Format sources for display
             sources = format_sources(results)
@@ -424,7 +529,7 @@ def main():
             st.markdown('<div class="loading-message">✍️ Drafting a response based on the legal sources...</div>', unsafe_allow_html=True)
             
             # Get chat completion
-            response = get_chat_completion(chat_messages)
+            response = get_chat_completion(chat_messages, openai_api_key)
             
             # Add assistant response to chat history
             st.session_state.messages.append({"role": "assistant", "content": response})
