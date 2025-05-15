@@ -17,7 +17,7 @@ TOP_K = 5  # Number of top similar vectors to retrieve
 
 # Initialize Streamlit page with a nice clean look
 st.set_page_config(
-    page_title="LawChat - Legal Research Assistant",
+    page_title="Ethiopian LawChat",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded"
