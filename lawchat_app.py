@@ -301,16 +301,16 @@ def create_system_prompt(context_docs):
     
     # Create the system prompt
     system_prompt = f"""You are LawChat, a helpful legal research assistant. 
-You have access to the following relevant legal documents:
+        You have access to the following relevant legal documents:
 
-{context}
+        {context}
 
-Please use this context to answer the user's questions about legal matters.
-When you reference specific information from these sources, cite the source as [Source X].
-If the information is not in the provided context, acknowledge that and provide general legal information, 
-but make it clear that this is general information and not specific legal advice.
-Always maintain a professional, helpful tone and format your responses clearly.
-"""
+        Please use this context to answer the user's questions about legal matters.
+        When you reference specific information from these sources, cite the source as [Source X].
+        If the information is not in the provided context, acknowledge that and provide general legal information, 
+        but make it clear that this is general information and not specific legal advice.
+        Always maintain a professional, helpful tone and format your responses clearly.
+        """
     return system_prompt
 
 # Display chat messages
