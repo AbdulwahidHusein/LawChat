@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Optional
 import os
+import time
 
 from config import SOURCE_PREVIEW_LENGTH, MAX_SOURCES_DISPLAY
 from styles import MAIN_CSS
@@ -31,10 +32,19 @@ def display_main_header():
 
 
 def display_stats_cards():
-    """Display session statistics in attractive cards."""
+    """Display session statistics in attractive cards with optimization."""
     from session_manager import get_session_stats
     
-    stats = get_session_stats()
+    # Only update stats every few seconds to reduce computation
+    if 'last_stats_update' not in st.session_state:
+        st.session_state.last_stats_update = 0
+    
+    current_time = time.time()
+    if current_time - st.session_state.last_stats_update > 5:  # Update every 5 seconds
+        st.session_state.cached_stats = get_session_stats()
+        st.session_state.last_stats_update = current_time
+    
+    stats = st.session_state.get('cached_stats', {})
     
     st.markdown('<div class="stats-container">', unsafe_allow_html=True)
     

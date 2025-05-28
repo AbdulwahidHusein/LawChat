@@ -14,9 +14,15 @@ PINECONE_HOST = "https://test-index-t9390q6.svc.aped-4627-b74a.pinecone.io"
 
 # OpenAI Configuration
 EMBEDDING_MODEL = "text-embedding-3-small"
-CHAT_MODEL = "gpt-4o"
-MAX_CONTEXT_LENGTH = 12000
-TOP_K = 5
+CHAT_MODEL = "gpt-4o-mini"
+MAX_CONTEXT_LENGTH = 8000
+TOP_K = 3
+
+# Performance Optimization
+ENABLE_CACHING = True
+CACHE_TTL = 300
+MIN_QUERY_LENGTH = 3
+MAX_QUERY_LENGTH = 500
 
 # Streamlit Configuration
 PAGE_CONFIG = {
