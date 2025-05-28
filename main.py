@@ -85,7 +85,7 @@ def setup_sidebar():
 
 
 def process_user_query(user_input: str, index, openai_api_key: str):
-    """Process a user query and generate AI response."""
+    """Process a user query and generate AI response with optimizations."""
     start_time = time.time()
     
     # Validate the query
@@ -93,67 +93,116 @@ def process_user_query(user_input: str, index, openai_api_key: str):
         st.error("Please enter a valid question (at least 3 characters).")
         return
     
-    # Show loading message with animation
-    with st.spinner("🔍 Searching through legal documents..."):
-        # Query Pinecone for relevant documents
-        results = query_pinecone(user_input, index, openai_api_key)
+    # Check cache for similar recent queries to avoid duplicate API calls
+    if 'query_cache' not in st.session_state:
+        st.session_state.query_cache = {}
+    
+    # Simple cache key based on query
+    cache_key = user_input.lower().strip()
+    if cache_key in st.session_state.query_cache:
+        cached_response = st.session_state.query_cache[cache_key]
+        # Use cached response if it's less than 5 minutes old
+        if time.time() - cached_response['timestamp'] < 300:
+            st.info("⚡ Using cached response for similar recent query")
+            add_message_to_history("assistant", cached_response['response'])
+            update_last_sources(cached_response['sources'])
+            return
+    
+    # Progress indicator for better UX
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    try:
+        # Step 1: Vector search
+        status_text.text("🔍 Searching documents...")
+        progress_bar.progress(25)
         
-        # Format sources for display
+        results = query_pinecone(user_input, index, openai_api_key)
         sources = format_sources(results)
         update_last_sources(sources)
         
-        # Create system prompt with context
-        system_prompt = create_system_prompt(sources)
+        # Step 2: Prepare context
+        status_text.text("📝 Preparing context...")
+        progress_bar.progress(50)
         
-        # Prepare messages for chat completion
+        system_prompt = create_system_prompt(sources)
         chat_messages = prepare_chat_messages(st.session_state.messages, system_prompt)
-    
-    # Show loading message for response generation
-    with st.spinner("✍️ Generating comprehensive legal analysis..."):
-        # Get chat completion
+        
+        # Step 3: Generate response
+        status_text.text("🤖 Generating response...")
+        progress_bar.progress(75)
+        
         response = get_chat_completion(chat_messages, openai_api_key)
         
-        # Add assistant response to chat history
-        add_message_to_history("assistant", response)
+        # Step 4: Finalize
+        status_text.text("✅ Complete!")
+        progress_bar.progress(100)
         
-        # Add to search history
+        # Add to chat history
+        add_message_to_history("assistant", response)
         add_to_search_history(user_input, response)
-    
-    # Calculate and display response time
-    response_time = time.time() - start_time
-    st.success(f"✅ Response generated in {response_time:.1f} seconds with {len(sources)} relevant sources.")
+        
+        # Cache the response
+        st.session_state.query_cache[cache_key] = {
+            'response': response,
+            'sources': sources,
+            'timestamp': time.time()
+        }
+        
+        # Clean up cache if it gets too large
+        if len(st.session_state.query_cache) > 10:
+            oldest_key = min(st.session_state.query_cache.keys(), 
+                           key=lambda k: st.session_state.query_cache[k]['timestamp'])
+            del st.session_state.query_cache[oldest_key]
+        
+        # Calculate response time
+        response_time = time.time() - start_time
+        
+        # Clear progress indicators
+        progress_bar.empty()
+        status_text.empty()
+        
+        st.success(f"✅ Response generated in {response_time:.1f}s with {len(sources)} sources")
+        
+    except Exception as e:
+        progress_bar.empty()
+        status_text.empty()
+        st.error(f"❌ Error processing query: {str(e)}")
 
 
 def handle_query_input(index, openai_api_key: str, repeated_query: Optional[str] = None) -> bool:
     """Handle various query input methods and return True if query was processed."""
+    query_processed = False
+    
     # Check for suggested query
     suggested_query = display_search_suggestions()
     if suggested_query:
         add_message_to_history("user", suggested_query)
         increment_chat_count()
         process_user_query(suggested_query, index, openai_api_key)
-        return True
+        query_processed = True
     
     # Check for repeated query from sidebar (passed as parameter)
-    if repeated_query:
+    elif repeated_query:
         add_message_to_history("user", repeated_query)
         increment_chat_count()
         process_user_query(repeated_query, index, openai_api_key)
-        return True
+        query_processed = True
     
     # Handle direct chat input
-    user_input = st.chat_input(
-        "💬 Ask anything about Ethiopian law...",
-        key="main_chat_input"
-    )
+    else:
+        user_input = st.chat_input(
+            "💬 Ask anything about Ethiopian law...",
+            key="main_chat_input"
+        )
+        
+        if user_input:
+            add_message_to_history("user", user_input)
+            increment_chat_count()
+            process_user_query(user_input, index, openai_api_key)
+            query_processed = True
     
-    if user_input:
-        add_message_to_history("user", user_input)
-        increment_chat_count()
-        process_user_query(user_input, index, openai_api_key)
-        return True
-    
-    return False
+    return query_processed
 
 
 def main():
